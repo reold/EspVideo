@@ -8,8 +8,15 @@ This project allows casting of video files from a PC to an esp32. It can be used
 
 After cloning the repository, follow the steps:
 
-1. Open cmd in the root directory
-1. Download video:
+- Open cmd in the root directory
+- Download video:
+  `python main.py download url`
+  here the **url** keyword must be replaced by the video url
+
+- Process video:
+  `python main.py process`
+
+- Stream video: `python main.py stream`
 
 ## Contributing
 
