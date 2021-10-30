@@ -51,32 +51,38 @@ elif job == "process":
 
     video = VideoFileClip(r"downloads\video.mp4")
 
-    resized_video = video.resize(newsize=(128, 64))
+    resized_video = video.resize(newsize=(64, 32))
 
     # resized_video.write_videofile("processed.mp4", fps=video.fps)
 
+    normal_images = list(resized_video.iter_frames())
+    low_fps_images = []
     bw_images = []
+
+
+    # reduce video fps to 1
+
+    if video.fps != 1:
+        print(bcolors.OKGREEN + "- fps exceeds limit of 1, reducing frames")
+        for frm_no, frame in enumerate(normal_images):
+            if (frm_no % video.fps) == 0:
+                low_fps_images.append(normal_images[frm_no])
 
     # convert image to grayscale
     # then append to list of black and white images
-    print(bcolors.OKGREEN + "- converting to black and white")
-    for frame in resized_video.iter_frames():
+
+
+    print("- converting to black and white")
+
+    for frame in low_fps_images:
         gray_image = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         (thresh, bw_image) = cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)
         bw_images.append(bw_image)
 
-    final_images = []
-
-    if video.fps != 1:
-        print("- fps exceeds limit of 1, reducing frames")
-        for frm_no, frame in enumerate(bw_images):
-            if (frm_no % video.fps) == 0:
-                final_images.append(bw_images[frm_no])
-
     final_data = []
 
     print("- converting to usable information")
-    for image in final_images:
+    for image in bw_images:
         final_data.append({})
         black_amount = white_amount = 0
         for row_no, row in enumerate(image):
@@ -110,13 +116,75 @@ elif job == "process":
     print(f"- total frames: {len(final_data)}")
 
     # Serializing json
-    json_object = json.dumps(final_data, indent=4)
+    json_object = str(final_data)
 
     # Writing to sample.json
     print("- writing data to file" + bcolors.ENDC)
     with open("processed_data.json", "w") as outfile:
         outfile.write(json_object)
 
+elif job == "stream":
+    import socket
+    import json
+
+    processed_data = NotImplemented
+
+    with open("processed_data.json") as f:
+        processed_data = json.load(f)
+
+    print(f"{bcolors.OKGREEN}starting sockets server{bcolors.ENDC}")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    server.bind(("0.0.0.0", 80))
+    server.listen(0)
+
+    def send_data(client, frame, part):
+        frame_data = processed_data[frame]
+        if part == 0:
+            frame_part = frame_data["data"][
+                : int(len(frame_data["data"]) / 2) // 2 // 2 // 2 // 2 // 2
+            ]
+        elif part == 1:
+            frame_part = frame_data["data"][
+                int(len(frame_data["data"]) / 2)
+                // 2
+                // 2 : int(len(frame_data["data"]) / 2)
+            ]
+        else:
+            pass
+
+        client.send(str(frame_part).encode("utf-8"))
+
+    while True:
+
+        client, addr = server.accept()
+        print(f"Connected by {addr}")
+
+        stream_status = False
+        old_frame = old_part = 0
+
+        while True:
+            cli_msg = client.recv(32).decode("UTF-8")
+
+            if len(cli_msg) == 0:
+                break
+            else:
+                if not stream_status:
+                    if cli_msg == "START_STREAM":
+                        stream_status = True
+                        send_data(client, old_frame, old_part)
+                elif stream_status:
+                    if cli_msg == "NEXT_PART":
+                        old_part += 1
+                        send_data(client, old_frame, old_part)
+
+                    if cli_msg.startswith("FRAME") == True:
+                        old_frame = int(cli_msg[5:])
+                        old_part = 0
+                        send_data(client, old_frame, old_part)
+
+        print("Closing connection")
+        client.close()
 
 else:
     print(bcolors.FAIL + "Invalid task name" + bcolors.ENDC)
