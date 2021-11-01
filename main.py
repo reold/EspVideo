@@ -63,8 +63,6 @@ elif job == "process":
         for frm_no, frame in enumerate(original_images):
             if (frm_no % video.fps) == 0:
                 low_fps_images.append(original_images[frm_no])
-    else:
-        low_fps_images = original_images
 
     # convert image to grayscale
     # then append to list of black and white images
@@ -81,9 +79,37 @@ elif job == "process":
     for image in black_white_images:
         final_data.append({})
 
-        color_amount = Counter(image)
+        black_amount = white_amount = 0
 
-        print(color_amount)
+        for row in image.tolist():
+            for color in image:
+                color_amount = Counter(color)
+
+                black_amount += color_amount[0]
+                white_amount += color_amount[255]
+
+        print(black_amount)
+        print(white_amount)
+
+        if black_amount >= white_amount:
+            # black data is more, so save white data
+            final_data[-1]["whitedata"] = True
+            final_data[-1]["data"] = []
+
+        elif white_amount >= black_amount:
+            final_data[-1]["whitedata"] = True
+            final_data[-1]["data"] = []
+
+        for no_row, row in enumerate(image.tolist()):
+            for no_pixel, pixel in enumerate(row):
+                if black_amount >= white_amount:
+                    # black data is more, save white data
+                    if pixel == 255:
+                        final_data[-1]["data"].append({"x": no_pixel, "y": no_row})
+                elif white_amount >= black_amount:
+
+                    if pixel == 0:
+                        final_data[-1]["data"].append({"x": no_pixel, "y": no_row})
 
     # for image in black_white_images:
     #     final_data.append({})
@@ -116,15 +142,15 @@ elif job == "process":
     #                         {"x": pixel_no, "y": row_no}
     #                     )
 
-    # print(f"- total frames: {len(final_data)}")
+    print(f"- total frames: {len(final_data)}")
 
-    # # Serializing json
-    # json_object = json.dumps(final_data)
+    # Serializing json
+    json_object = json.dumps(final_data)
 
-    # # Writing to sample.json
-    # print("- writing data to file" + bcolors.ENDC)
-    # with open("processed_data.json", "w") as outfile:
-    #     outfile.write(json_object)
+    # Writing to sample.json
+    print("- writing data to file" + bcolors.ENDC)
+    with open("processed_data.json", "w") as outfile:
+        outfile.write(json_object)
 
 elif job == "stream":
     import socket

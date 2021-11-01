@@ -5,7 +5,7 @@ class ImageProcessor:
     def __init__(self):
         pass
 
-    def process_image(base_image):
+    def process_image(self, base_image):
 
         gray_image = cv2.cvtColor(base_image, cv2.COLOR_BGR2GRAY)
 
