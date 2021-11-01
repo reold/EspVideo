@@ -44,84 +44,87 @@ if job == "download":
 
 elif job == "process":
     from moviepy.editor import VideoFileClip
-    import cv2
+    from collections import Counter
     import json
+    from imageProcessor import ImageProcessor
 
-    final_video_frames = []
+    image_processor = ImageProcessor()
 
     video = VideoFileClip(r"downloads\video.mp4")
-
     resized_video = video.resize(newsize=(64, 32))
 
-    # resized_video.write_videofile("processed.mp4", fps=video.fps)
-
-    normal_images = list(resized_video.iter_frames())
+    original_images = list(resized_video.iter_frames())
     low_fps_images = []
-    bw_images = []
-
+    black_white_images = []
 
     # reduce video fps to 1
-
     if video.fps != 1:
         print(bcolors.OKGREEN + "- fps exceeds limit of 1, reducing frames")
-        for frm_no, frame in enumerate(normal_images):
+        for frm_no, frame in enumerate(original_images):
             if (frm_no % video.fps) == 0:
-                low_fps_images.append(normal_images[frm_no])
+                low_fps_images.append(original_images[frm_no])
+    else:
+        low_fps_images = original_images
 
     # convert image to grayscale
     # then append to list of black and white images
 
-
     print("- converting to black and white")
 
     for frame in low_fps_images:
-        gray_image = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        (thresh, bw_image) = cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)
-        bw_images.append(bw_image)
+        processed_image = image_processor.process_image(frame)
+        black_white_images.append(processed_image)
 
     final_data = []
-
     print("- converting to usable information")
-    for image in bw_images:
+
+    for image in black_white_images:
         final_data.append({})
-        black_amount = white_amount = 0
-        for row_no, row in enumerate(image):
-            for pixel_no, pixel in enumerate(image):
-                if pixel == (0, 0, 0):
-                    black_amount += 1
-                elif pixel == (255, 255, 255):
-                    white_amount += 1
 
-        if black_amount >= white_amount:
-            final_data[len(final_data) - 1]["whitedata"] = True
-            final_data[len(final_data) - 1]["data"] = []
+        color_amount = Counter(image)
 
-            for row_no, row in enumerate(image):
-                for pixel_no, pixel in enumerate(row):
-                    if pixel == 0:
-                        final_data[len(final_data) - 1]["data"].append(
-                            {"x": pixel_no, "y": row_no}
-                        )
-        if black_amount <= white_amount:
-            final_data[len(final_data) - 1]["whitedata"] = False
-            final_data[len(final_data) - 1]["data"] = []
+        print(color_amount)
 
-            for row_no, row in enumerate(image):
-                for pixel_no, pixel in enumerate(row):
-                    if pixel == 255:
-                        final_data[len(final_data) - 1]["data"].append(
-                            {"x": pixel_no, "y": row_no}
-                        )
+    # for image in black_white_images:
+    #     final_data.append({})
+    #     black_amount = white_amount = 0
+    #     for row_no, row in enumerate(image):
+    #         for pixel_no, pixel in enumerate(image):
+    #             if pixel == (0, 0, 0):
+    #                 black_amount += 1
+    #             elif pixel == (255, 255, 255):
+    #                 white_amount += 1
 
-    print(f"- total frames: {len(final_data)}")
+    #     if black_amount >= white_amount:
+    #         final_data[len(final_data) - 1]["whitedata"] = True
+    #         final_data[len(final_data) - 1]["data"] = []
 
-    # Serializing json
-    json_object = str(final_data)
+    #         for row_no, row in enumerate(image):
+    #             for pixel_no, pixel in enumerate(row):
+    #                 if pixel == 0:
+    #                     final_data[len(final_data) - 1]["data"].append(
+    #                         {"x": pixel_no, "y": row_no}
+    #                     )
+    #     if black_amount <= white_amount:
+    #         final_data[len(final_data) - 1]["whitedata"] = False
+    #         final_data[len(final_data) - 1]["data"] = []
 
-    # Writing to sample.json
-    print("- writing data to file" + bcolors.ENDC)
-    with open("processed_data.json", "w") as outfile:
-        outfile.write(json_object)
+    #         for row_no, row in enumerate(image):
+    #             for pixel_no, pixel in enumerate(row):
+    #                 if pixel == 255:
+    #                     final_data[len(final_data) - 1]["data"].append(
+    #                         {"x": pixel_no, "y": row_no}
+    #                     )
+
+    # print(f"- total frames: {len(final_data)}")
+
+    # # Serializing json
+    # json_object = json.dumps(final_data)
+
+    # # Writing to sample.json
+    # print("- writing data to file" + bcolors.ENDC)
+    # with open("processed_data.json", "w") as outfile:
+    #     outfile.write(json_object)
 
 elif job == "stream":
     import socket
@@ -138,53 +141,66 @@ elif job == "stream":
     server.bind(("0.0.0.0", 80))
     server.listen(0)
 
-    def send_data(client, frame, part):
-        frame_data = processed_data[frame]
-        if part == 0:
-            frame_part = frame_data["data"][
-                : int(len(frame_data["data"]) / 2) // 2 // 2 // 2 // 2 // 2
-            ]
-        elif part == 1:
-            frame_part = frame_data["data"][
-                int(len(frame_data["data"]) / 2)
-                // 2
-                // 2 : int(len(frame_data["data"]) / 2)
-            ]
-        else:
-            pass
+    class ClientUtils:
+        def __init__(self, client, addr):
+            self.client = client
+            self.addr = addr
 
-        client.send(str(frame_part).encode("utf-8"))
+        def getFrameData(self, params):
+
+            frame_no, frame_part = params
+
+            frame_no = int(frame_no)
+            frame_part = int(frame_part)
+
+            print(params)
+
+            # frame_no, frame_part = int(frame_no), int(frame_part)
+
+            print(f"fetching frame {frame_no} data")
+
+            frame_data = processed_data[int(frame_no)]
+            frame_part_data = {"whitedata": frame_data["whitedata"]}
+            frame_part_data["data"] = frame_data["data"][
+                int(frame_part) : (int(frame_part) + 10)
+            ]
+
+            print(frame_part_data)
+
+            client.send(json.dumps(frame_part_data).encode("utf-8"))
+
+        def noPixels(self, params):
+
+            frame_no = params[0]
+
+            frame_no = int(frame_no)
+
+            client.send(str(len(processed_data[frame_no]["data"])).encode("utf-8"))
 
     while True:
-
         client, addr = server.accept()
-        print(f"Connected by {addr}")
-
-        stream_status = False
-        old_frame = old_part = 0
+        client_utils = ClientUtils(client, addr)
+        print(f"connected by {addr}")
 
         while True:
-            cli_msg = client.recv(32).decode("UTF-8")
+            client_msg = client.recv(64).decode("utf-8")
 
-            if len(cli_msg) == 0:
+            print(f"client message: {client_msg}")
+
+            if client_msg.startswith("getFrameData"):
+                params = client_msg.split(",")[1:]
+                client_utils.getFrameData(params)
+
+            elif client_msg.startswith("noPixels"):
+                params = client_msg.split(",")[1:]
+                client_utils.noPixels(params)
+
+            if client_msg == "!quit" or len(client_msg) == 0:
+                print("client quit")
                 break
-            else:
-                if not stream_status:
-                    if cli_msg == "START_STREAM":
-                        stream_status = True
-                        send_data(client, old_frame, old_part)
-                elif stream_status:
-                    if cli_msg == "NEXT_PART":
-                        old_part += 1
-                        send_data(client, old_frame, old_part)
 
-                    if cli_msg.startswith("FRAME") == True:
-                        old_frame = int(cli_msg[5:])
-                        old_part = 0
-                        send_data(client, old_frame, old_part)
-
-        print("Closing connection")
         client.close()
+
 
 else:
     print(bcolors.FAIL + "Invalid task name" + bcolors.ENDC)
